@@ -1,0 +1,12 @@
+langchain-openai~=0.3.28
+langchain-community~=0.3.27
+openai
+python-dotenv
+langgraph~=0.5.4
+
+langchain~=0.3.26
+google-search-results
+
+google-cloud-aiplatform
+langchain-google-vertexai
+langchain-groq
