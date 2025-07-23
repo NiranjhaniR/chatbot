@@ -258,12 +258,18 @@ class FinancialPlannerBot {
     createFinancialPlan() {
         const goal = this.userData.user_goal || 'Business expansion';
         const timeline = parseInt(this.userData.user_timeline) || 12;
-        const revenue = parseFloat(this.userData.user_cashflow) || 50000;
-        const expenses = parseFloat(this.userData.user_expenses) || 40000;
+        
+        // Parse cash flow data (could be comma-separated values)
+        const cashflowInput = this.userData.user_cashflow || '50000';
+        const cashflowValues = cashflowInput.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
+        const avgRevenue = cashflowValues.length > 0 ? 
+            cashflowValues.reduce((a, b) => a + b, 0) / cashflowValues.length : 50000;
+        
+        const expenses = parseFloat(this.userData.user_expenses) || avgRevenue * 0.8;
         const savings = parseFloat(this.userData.user_savings) || 10000;
         const funding = this.userData.user_funding || 'self-funded';
         
-        const netCashFlow = revenue - expenses;
+        const netCashFlow = avgRevenue - expenses;
         const monthlySavingsCapacity = netCashFlow * 0.7; // 70% of net cash flow
         
         // Estimate CAPEX based on goal type
@@ -294,6 +300,8 @@ class FinancialPlannerBot {
 📊 Additional Needed: ₹${totalNeeded.toLocaleString()}
 
 💵 FINANCIAL CAPACITY
+Monthly Average Revenue: ₹${avgRevenue.toLocaleString()}
+Monthly Expenses: ₹${expenses.toLocaleString()}
 Monthly Net Cash Flow: ₹${netCashFlow.toLocaleString()}
 Monthly Savings Target: ₹${monthlySavingsCapacity.toLocaleString()}
 Time to Save: ${monthsToSave === Infinity ? 'Insufficient cash flow' : Math.ceil(monthsToSave) + ' months'}
@@ -301,6 +309,11 @@ Time to Save: ${monthsToSave === Infinity ? 'Insufficient cash flow' : Math.ceil
 ${isFeasible ? '✅ ACHIEVABLE' : '⚠️ CHALLENGING'}
 Confidence Level: ${isFeasible ? 'High' : 'Medium'}
 
+${cashflowValues.length > 1 ? `📈 CASH FLOW ANALYSIS
+Projected Revenue: ${cashflowValues.map((v, i) => `Month ${i+1}: ₹${v.toLocaleString()}`).join(', ')}
+Average Monthly Revenue: ₹${avgRevenue.toLocaleString()}
+
+` : ''}📅 MONTHLY PLAN
 📅 MONTHLY PLAN
 ${this.generateMonthlyPlan(timeline, monthlySavingsCapacity, savings, estimatedCapex)}
 
@@ -310,6 +323,7 @@ ${isFeasible ?
   '• Consider extending timeline by 3-6 months\n• Explore business loan options\n• Focus on increasing revenue first'
 }
 
+${funding === 'loan' ? '🏦 LOAN CONSIDERATIONS:\n• Prepare 2-3 years of financial statements\n• Consider business loan of ₹' + Math.ceil(totalNeeded/10000)*10000 + '\n• Compare interest rates from multiple lenders\n\n' : ''}${funding === 'external' ? '👥 EXTERNAL FUNDING:\n• Develop comprehensive business plan\n• Prepare investor pitch deck\n• Consider equity vs debt financing\n\n' : ''}🎯 NEXT STEPS:
 🎯 NEXT STEPS:
 1. Open dedicated savings account
 2. Set up monthly transfers
