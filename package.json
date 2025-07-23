@@ -1,0 +1,13 @@
+{
+  "name": "financial-planner-chatbot",
+  "version": "1.0.0",
+  "description": "Goal-Based Financial Planner Chatbot for SMEs",
+  "main": "index.html",
+  "scripts": {
+    "dev": "python -m http.server 3000",
+    "start": "python -m http.server 3000"
+  },
+  "keywords": ["financial", "planning", "chatbot", "sme", "business"],
+  "author": "Financial Advisor AI",
+  "license": "MIT"
+}
