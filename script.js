@@ -343,18 +343,118 @@ class FinancialPlannerBot {
         loadingDiv.textContent = 'AI is generating personalized recommendations...';
         this.chatMessages.appendChild(loadingDiv);
         
-        const prompt = `As a financial advisor AI, provide specific recommendations for this business scenario: Goal: ${this.userData.user_goal}, Timeline: ${this.userData.user_timeline} months, Monthly Revenue: ₹${this.userData.user_cashflow}, Monthly Expenses: ₹${this.userData.user_expenses}, Current Savings: ₹${this.userData.user_savings}, Funding Preference: ${this.userData.user_funding}. Give actionable advice.`;
+        const prompt = `Financial Advisory Request:
+Business Goal: ${this.userData.user_goal || 'Business expansion'}
+Timeline: ${this.userData.user_timeline || 12} months
+Monthly Revenue: ₹${this.userData.user_cashflow || 50000}
+Monthly Expenses: ₹${this.userData.user_expenses || 40000}
+Current Savings: ₹${this.userData.user_savings || 10000}
+Funding Preference: ${this.userData.user_funding || 'self-funded'}
+
+Please provide 5 specific, actionable financial recommendations for achieving this business goal within the given timeline and budget constraints.`;
         
         try {
-            const aiResponse = await this.callHuggingFaceAPI(prompt);
+            const aiResponse = await this.callHuggingFaceAPI(prompt, 'facebook/blenderbot-400M-distill');
             loadingDiv.remove();
-            this.addAIMessage(`🎯 **AI Recommendations:**\n\n${aiResponse}`);
+            
+            // Enhanced recommendations with structured format
+            const structuredRecommendations = this.createStructuredRecommendations();
+            const combinedResponse = `🎯 **AI RECOMMENDATIONS:**\n\n${aiResponse}\n\n${structuredRecommendations}`;
+            
+            this.addAIMessage(combinedResponse);
         } catch (error) {
+            console.error('AI Recommendations Error:', error);
             loadingDiv.remove();
-            this.addAIMessage(`🎯 **AI Recommendations:**\n\n${this.getFallbackResponse(prompt)}`);
+            
+            // Provide comprehensive fallback recommendations
+            const fallbackRecommendations = this.createStructuredRecommendations();
+            this.addAIMessage(`🎯 **SMART RECOMMENDATIONS:**\n\n${fallbackRecommendations}`);
         }
         
-        this.showFlow('plan_result');
+        // Update the flow to show proper actions
+        setTimeout(() => {
+            this.showFlow('plan_result');
+        }, 1000);
+    }
+    
+    createStructuredRecommendations() {
+        const goal = this.userData.user_goal || 'Business expansion';
+        const timeline = parseInt(this.userData.user_timeline) || 12;
+        const revenue = parseFloat(this.userData.user_cashflow) || 50000;
+        const expenses = parseFloat(this.userData.user_expenses) || 40000;
+        const savings = parseFloat(this.userData.user_savings) || 10000;
+        const funding = this.userData.user_funding || 'self-funded';
+        
+        const netCashFlow = revenue - expenses;
+        const savingsRate = netCashFlow > 0 ? (netCashFlow / revenue * 100).toFixed(1) : 0;
+        
+        return `📋 **PERSONALIZED ACTION PLAN:**
+
+💰 **IMMEDIATE ACTIONS (Month 1-2):**
+• Set up automatic transfer of ₹${Math.floor(netCashFlow * 0.7).toLocaleString()}/month to goal savings
+• Review and cut unnecessary expenses by 10-15%
+• Open a separate high-yield savings account for this goal
+• Create monthly budget tracking system
+
+📈 **GROWTH STRATEGIES (Month 3-6):**
+• Increase revenue by 5-10% through ${this.getRevenueStrategy(goal)}
+• Negotiate better rates with suppliers to reduce costs
+• Consider pre-orders or advance payments from customers
+• Explore government schemes for ${funding === 'loan' ? 'business loans' : 'business grants'}
+
+🎯 **GOAL-SPECIFIC RECOMMENDATIONS:**
+${this.getGoalSpecificAdvice(goal, timeline, netCashFlow)}
+
+⚠️ **RISK MANAGEMENT:**
+• Maintain emergency fund of ₹${(expenses * 3).toLocaleString()} (3 months expenses)
+• Get business insurance before major investments
+• Start with pilot/small-scale implementation if possible
+• Track ROI metrics from month 1
+
+📊 **MONTHLY TARGETS:**
+• Save: ₹${Math.floor(netCashFlow * 0.7).toLocaleString()}/month
+• Current Savings Rate: ${savingsRate}% of revenue
+• Target: Achieve goal in ${timeline} months
+• Review progress every 30 days`;
+    }
+    
+    getRevenueStrategy(goal) {
+        const goalLower = goal.toLowerCase();
+        if (goalLower.includes('restaurant') || goalLower.includes('food')) {
+            return 'menu optimization, delivery partnerships, catering services';
+        } else if (goalLower.includes('retail') || goalLower.includes('shop')) {
+            return 'online sales, loyalty programs, seasonal promotions';
+        } else if (goalLower.includes('service')) {
+            return 'premium service packages, referral programs, subscription models';
+        } else {
+            return 'new customer acquisition, upselling existing clients, digital marketing';
+        }
+    }
+    
+    getGoalSpecificAdvice(goal, timeline, cashFlow) {
+        const goalLower = goal.toLowerCase();
+        
+        if (goalLower.includes('hire') || goalLower.includes('staff')) {
+            return `• Calculate total hiring cost: salary + benefits + training + equipment
+• Start recruitment process 2 months before target date
+• Consider part-time or contract workers initially
+• Budget for 3-6 months of salary as buffer`;
+        } else if (goalLower.includes('expand') || goalLower.includes('location')) {
+            return `• Research new location thoroughly (foot traffic, competition, rent)
+• Negotiate flexible lease terms (shorter initial period)
+• Plan for 6 months of operating expenses for new location
+• Consider franchising or partnership models`;
+        } else if (goalLower.includes('equipment')) {
+            return `• Get quotes from multiple suppliers
+• Consider leasing vs buying (cash flow impact)
+• Look for end-of-year deals or bulk discounts
+• Plan for installation, training, and maintenance costs`;
+        } else {
+            return `• Break down the goal into smaller, measurable milestones
+• Research all associated costs (hidden costs often 20-30% more)
+• Create contingency fund of 15-20% of total budget
+• Set up progress tracking and review checkpoints`;
+        }
     }
     
     async getAIResponse() {
