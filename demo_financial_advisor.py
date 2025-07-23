@@ -4,6 +4,7 @@ Demo script for the Smart Financial Advisor
 Shows various business scenarios and financial planning outputs
 """
 
+import sys
 from financial_advisor import analyze_business_goal
 
 def demo_scenarios():
@@ -89,7 +90,13 @@ def demo_scenarios():
         
         # Pause between scenarios for readability
         if i < len(scenarios):
-            input("Press Enter to continue to next scenario...")
+            try:
+                if sys.stdin.isatty():
+                    input("Press Enter to continue to next scenario...")
+                else:
+                    print("(Continuing to next scenario...)")
+            except (EOFError, KeyboardInterrupt):
+                print("\nContinuing to next scenario...")
 
 def interactive_demo():
     """Interactive demo where user can input their own scenario"""
@@ -99,6 +106,10 @@ def interactive_demo():
     
     try:
         # Get user input
+        if not sys.stdin.isatty():
+            print("Interactive mode not available in non-interactive environment.")
+            return
+            
         goal = input("\n📋 Describe your business goal: ")
         timeline = int(input("⏰ Timeline in months: "))
         inflow = float(input("💰 Monthly revenue/inflow ($): "))
@@ -129,7 +140,7 @@ def interactive_demo():
         print(result)
         
         # Offer to save the plan
-        save_plan = input("\n💾 Would you like to save this plan to a file? (y/n): ")
+        save_plan = input("\n💾 Would you like to save this plan to a file? (y/n): ") if sys.stdin.isatty() else 'n'
         if save_plan.lower() == 'y':
             filename = f"financial_plan_{goal.replace(' ', '_')[:20]}.txt"
             with open(filename, 'w') as f:
@@ -138,28 +149,39 @@ def interactive_demo():
         
     except ValueError:
         print("❌ Please enter valid numbers for financial data.")
+    except EOFError:
+        print("\n❌ Input not available in non-interactive environment.")
     except KeyboardInterrupt:
         print("\n👋 Thanks for using the Financial Advisor!")
     except Exception as e:
         print(f"❌ An error occurred: {e}")
 
 if __name__ == "__main__":
-    print("🏢 SMART FINANCIAL ADVISOR FOR SMBs")
-    print("Choose your demo mode:")
-    print("1. View pre-built scenarios")
-    print("2. Interactive planning session")
-    print("3. Both")
-    
-    choice = input("\nEnter your choice (1-3): ")
-    
-    if choice == "1":
-        demo_scenarios()
-    elif choice == "2":
-        interactive_demo()
-    elif choice == "3":
-        demo_scenarios()
-        print("\n" + "="*60)
-        interactive_demo()
-    else:
-        print("Invalid choice. Running demo scenarios...")
+    try:
+        if sys.stdin.isatty():
+            print("🏢 SMART FINANCIAL ADVISOR FOR SMBs")
+            print("Choose your demo mode:")
+            print("1. View pre-built scenarios")
+            print("2. Interactive planning session")
+            print("3. Both")
+            
+            choice = input("\nEnter your choice (1-3): ")
+            
+            if choice == "1":
+                demo_scenarios()
+            elif choice == "2":
+                interactive_demo()
+            elif choice == "3":
+                demo_scenarios()
+                print("\n" + "="*60)
+                interactive_demo()
+            else:
+                print("Invalid choice. Running demo scenarios...")
+                demo_scenarios()
+        else:
+            print("🏢 SMART FINANCIAL ADVISOR FOR SMBs - Non-interactive mode")
+            print("Running demo scenarios...")
+            demo_scenarios()
+    except (EOFError, KeyboardInterrupt):
+        print("\n🏢 Running demo scenarios in non-interactive mode...")
         demo_scenarios()
