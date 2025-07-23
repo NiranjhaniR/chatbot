@@ -10,3 +10,5 @@ google-search-results
 google-cloud-aiplatform
 langchain-google-vertexai
 langchain-groq
+dataclasses
+typing
