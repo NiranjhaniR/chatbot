@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npx serve . -p 3000",
     "start": "npx serve . -p 3000",
-    "build": "echo 'Build complete - static files ready for deployment'"
+    "build": "echo 'Static files ready for deployment - no build step required'"
   },
   "keywords": ["financial", "planning", "chatbot", "sme", "business"],
   "author": "Financial Advisor AI",
