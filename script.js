@@ -6,10 +6,21 @@ class FinancialPlannerBot {
         this.inputContainer = document.getElementById('inputContainer');
         this.progressFill = document.getElementById('progressFill');
         
+        // Hugging Face API configuration (free tier)
+        this.aiConfig = {
+            baseUrl: 'https://api-inference.huggingface.co/models/',
+            models: {
+                // Free open-source models
+                primary: 'microsoft/DialoGPT-large',
+                financial: 'facebook/blenderbot-400M-distill',
+                fallback: 'gpt2'
+            }
+        };
+        
         this.flows = {
             start: {
                 messages: [
-                    { type: 'text', text: '👋 Hi there! I\'m your AI Financial Planner. Ready to build a plan for your business goal?' }
+                    { type: 'text', text: '👋 Hi there! I\'m your AI Financial Planner powered by open-source AI. Ready to build a personalized plan for your business goal?' }
                 ],
                 actions: [
                     { type: 'button', label: 'Yes, let\'s do it', target: 'ask_goal' }
@@ -74,7 +85,7 @@ class FinancialPlannerBot {
             },
             ai_planner: {
                 messages: [
-                    { type: 'text', text: '🤖 Analyzing your data and creating a personalized financial plan...' }
+                    { type: 'text', text: '🤖 Connecting to AI Financial Advisor... Analyzing your data and creating a personalized plan...' }
                 ],
                 actions: [],
                 progress: 100
@@ -82,37 +93,33 @@ class FinancialPlannerBot {
             plan_result: {
                 messages: [],
                 actions: [
-                    { type: 'button', label: 'Set Monthly Reminders', target: 'reminder' },
-                    { type: 'button', label: 'Explore Loan Options', target: 'loan_suggestion' },
+                    { type: 'button', label: 'Get AI Recommendations', target: 'ai_recommendations' },
+                    { type: 'button', label: 'Ask AI Questions', target: 'ai_chat' },
                     { type: 'button', label: 'Start Over', target: 'start' }
                 ],
                 progress: 100
             },
-            reminder: {
+            ai_recommendations: {
                 messages: [
-                    { type: 'text', text: '✅ Reminder set! I\'ll nudge you every month to review your goal savings progress.' }
+                    { type: 'text', text: '🤖 Getting personalized AI recommendations...' }
+                ],
+                actions: [],
+                progress: 100
+            },
+            ai_chat: {
+                messages: [
+                    { type: 'text', text: '💬 Ask me anything about your financial plan! I\'m powered by AI and can help with specific questions.' }
                 ],
                 actions: [
-                    { type: 'button', label: 'Start New Plan', target: 'start' }
+                    { type: 'input', key: 'ai_question', target: 'ai_response', placeholder: 'Ask your financial question...' }
                 ],
                 progress: 100
             },
-            loan_suggestion: {
-                messages: [
-                    { type: 'text', text: '💡 Based on your plan, a small business loan might help accelerate your goal. Want me to show funding options?' }
-                ],
+            ai_response: {
+                messages: [],
                 actions: [
-                    { type: 'button', label: 'Yes, show me options', target: 'end' },
-                    { type: 'button', label: 'No thanks', target: 'end' }
-                ],
-                progress: 100
-            },
-            end: {
-                messages: [
-                    { type: 'text', text: 'Thanks for using the Goal-Based Planner! Come back anytime to update or review your plan 🚀' }
-                ],
-                actions: [
-                    { type: 'button', label: 'Start New Plan', target: 'start' }
+                    { type: 'button', label: 'Ask Another Question', target: 'ai_chat' },
+                    { type: 'button', label: 'Back to Plan', target: 'plan_result' }
                 ],
                 progress: 100
             }
@@ -137,9 +144,15 @@ class FinancialPlannerBot {
             this.addMessage(message.text, 'bot');
         });
         
-        // Handle special AI planner flow
+        // Handle special AI flows
         if (flowId === 'ai_planner') {
-            this.generateFinancialPlan();
+            this.generateAIFinancialPlan();
+            return;
+        } else if (flowId === 'ai_recommendations') {
+            this.getAIRecommendations();
+            return;
+        } else if (flowId === 'ai_response') {
+            this.getAIResponse();
             return;
         }
         
@@ -225,7 +238,7 @@ class FinancialPlannerBot {
     addAIMessage(text) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message ai-response';
-        messageDiv.textContent = text;
+        messageDiv.innerHTML = text.replace(/\n/g, '<br>');
         
         this.chatMessages.appendChild(messageDiv);
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
@@ -235,118 +248,200 @@ class FinancialPlannerBot {
         this.progressFill.style.width = percentage + '%';
     }
     
-    async generateFinancialPlan() {
+    // AI Integration Methods
+    async callHuggingFaceAPI(prompt, model = 'microsoft/DialoGPT-large') {
+        try {
+            const response = await fetch(`${this.aiConfig.baseUrl}${model}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    inputs: prompt,
+                    parameters: {
+                        max_length: 500,
+                        temperature: 0.7,
+                        do_sample: true,
+                        top_p: 0.9
+                    }
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // Handle different response formats
+            if (Array.isArray(data) && data[0]?.generated_text) {
+                return data[0].generated_text.replace(prompt, '').trim();
+            } else if (data.generated_text) {
+                return data.generated_text.replace(prompt, '').trim();
+            } else if (typeof data === 'string') {
+                return data;
+            }
+            
+            return 'I apologize, but I received an unexpected response format. Let me try a different approach.';
+            
+        } catch (error) {
+            console.error('AI API Error:', error);
+            return this.getFallbackResponse(prompt);
+        }
+    }
+    
+    getFallbackResponse(prompt) {
+        // Fallback responses when AI service is unavailable
+        if (prompt.includes('financial plan') || prompt.includes('business goal')) {
+            return `Based on your business goal and financial data, I recommend creating a structured savings plan. Focus on optimizing your cash flow and consider the timeline you've set. Would you like me to break down specific steps?`;
+        } else if (prompt.includes('recommendation')) {
+            return `Here are some general recommendations: 1) Set up automatic savings transfers, 2) Review your expenses monthly, 3) Consider multiple funding options, 4) Track your progress regularly. What specific area would you like me to focus on?`;
+        } else {
+            return `I understand your question about financial planning. While I'm having connectivity issues with the AI service, I can still help you with basic financial planning principles. Could you rephrase your question?`;
+        }
+    }
+    
+    async generateAIFinancialPlan() {
         // Show loading
         const loadingDiv = document.createElement('div');
         loadingDiv.className = 'message bot loading';
-        loadingDiv.textContent = 'Generating your financial plan';
+        loadingDiv.textContent = 'AI is analyzing your financial data...';
         this.chatMessages.appendChild(loadingDiv);
         
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Prepare prompt for AI
+        const prompt = this.createFinancialPlanPrompt();
         
-        // Remove loading message
-        loadingDiv.remove();
+        try {
+            // Call AI service
+            const aiResponse = await this.callHuggingFaceAPI(prompt, 'facebook/blenderbot-400M-distill');
+            
+            // Remove loading message
+            loadingDiv.remove();
+            
+            // Combine AI response with structured plan
+            const structuredPlan = this.createStructuredPlan();
+            const combinedResponse = `🤖 **AI Financial Analysis:**\n\n${aiResponse}\n\n${structuredPlan}`;
+            
+            this.addAIMessage(combinedResponse);
+            
+        } catch (error) {
+            loadingDiv.remove();
+            const fallbackPlan = this.createStructuredPlan();
+            this.addAIMessage(`🤖 **AI Financial Plan:**\n\n${fallbackPlan}`);
+        }
         
-        // Generate plan using the financial advisor logic
-        const plan = this.createFinancialPlan();
-        
-        this.addAIMessage(plan);
         this.showFlow('plan_result');
     }
     
-    createFinancialPlan() {
+    async getAIRecommendations() {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'message bot loading';
+        loadingDiv.textContent = 'AI is generating personalized recommendations...';
+        this.chatMessages.appendChild(loadingDiv);
+        
+        const prompt = `As a financial advisor AI, provide specific recommendations for this business scenario: Goal: ${this.userData.user_goal}, Timeline: ${this.userData.user_timeline} months, Monthly Revenue: ₹${this.userData.user_cashflow}, Monthly Expenses: ₹${this.userData.user_expenses}, Current Savings: ₹${this.userData.user_savings}, Funding Preference: ${this.userData.user_funding}. Give actionable advice.`;
+        
+        try {
+            const aiResponse = await this.callHuggingFaceAPI(prompt);
+            loadingDiv.remove();
+            this.addAIMessage(`🎯 **AI Recommendations:**\n\n${aiResponse}`);
+        } catch (error) {
+            loadingDiv.remove();
+            this.addAIMessage(`🎯 **AI Recommendations:**\n\n${this.getFallbackResponse(prompt)}`);
+        }
+        
+        this.showFlow('plan_result');
+    }
+    
+    async getAIResponse() {
+        const question = this.userData.ai_question;
+        
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'message bot loading';
+        loadingDiv.textContent = 'AI is thinking...';
+        this.chatMessages.appendChild(loadingDiv);
+        
+        const contextPrompt = `Context: User has a business goal: ${this.userData.user_goal}, Timeline: ${this.userData.user_timeline} months, Monthly Revenue: ₹${this.userData.user_cashflow}, Monthly Expenses: ₹${this.userData.user_expenses}. Question: ${question}. Provide helpful financial advice.`;
+        
+        try {
+            const aiResponse = await this.callHuggingFaceAPI(contextPrompt);
+            loadingDiv.remove();
+            this.addAIMessage(`🤖 **AI Response:**\n\n${aiResponse}`);
+        } catch (error) {
+            loadingDiv.remove();
+            this.addAIMessage(`🤖 **AI Response:**\n\n${this.getFallbackResponse(contextPrompt)}`);
+        }
+        
+        this.showFlow('ai_response');
+    }
+    
+    createFinancialPlanPrompt() {
+        return `As an expert financial advisor, analyze this business scenario and provide insights: 
+        Business Goal: ${this.userData.user_goal}
+        Timeline: ${this.userData.user_timeline} months
+        Monthly Revenue: ₹${this.userData.user_cashflow}
+        Monthly Expenses: ₹${this.userData.user_expenses}
+        Current Savings: ₹${this.userData.user_savings}
+        Preferred Funding: ${this.userData.user_funding}
+        
+        Provide analysis on feasibility, risks, and key recommendations.`;
+    }
+    
+    createStructuredPlan() {
         const goal = this.userData.user_goal || 'Business expansion';
         const timeline = parseInt(this.userData.user_timeline) || 12;
-        
-        // Parse cash flow data (could be comma-separated values)
-        const cashflowInput = this.userData.user_cashflow || '50000';
-        const cashflowValues = cashflowInput.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
-        const avgRevenue = cashflowValues.length > 0 ? 
-            cashflowValues.reduce((a, b) => a + b, 0) / cashflowValues.length : 50000;
-        
-        const expenses = parseFloat(this.userData.user_expenses) || avgRevenue * 0.8;
+        const revenue = parseFloat(this.userData.user_cashflow) || 50000;
+        const expenses = parseFloat(this.userData.user_expenses) || 40000;
         const savings = parseFloat(this.userData.user_savings) || 10000;
         const funding = this.userData.user_funding || 'self-funded';
         
-        const netCashFlow = avgRevenue - expenses;
-        const monthlySavingsCapacity = netCashFlow * 0.7; // 70% of net cash flow
+        const netCashFlow = revenue - expenses;
+        const monthlySavingsCapacity = netCashFlow * 0.7;
         
         // Estimate CAPEX based on goal type
-        let estimatedCapex = 100000; // Default
+        let estimatedCapex = 100000;
         const goalLower = goal.toLowerCase();
         
         if (goalLower.includes('hire') || goalLower.includes('staff')) {
             const staffCount = this.extractNumber(goal) || 2;
-            estimatedCapex = staffCount * 65000; // Annual cost per employee
-        } else if (goalLower.includes('expand') || goalLower.includes('branch') || goalLower.includes('location')) {
-            estimatedCapex = 150000; // New location cost
-        } else if (goalLower.includes('equipment') || goalLower.includes('machinery')) {
-            estimatedCapex = 80000; // Equipment cost
-        } else if (goalLower.includes('inventory') || goalLower.includes('stock')) {
-            estimatedCapex = 50000; // Inventory cost
+            estimatedCapex = staffCount * 65000;
+        } else if (goalLower.includes('expand') || goalLower.includes('branch')) {
+            estimatedCapex = 150000;
+        } else if (goalLower.includes('equipment')) {
+            estimatedCapex = 80000;
         }
         
         const totalNeeded = Math.max(0, estimatedCapex - savings);
         const monthsToSave = monthlySavingsCapacity > 0 ? totalNeeded / monthlySavingsCapacity : Infinity;
         const isFeasible = monthsToSave <= timeline;
         
-        return `🎯 FINANCIAL PLAN FOR YOUR GOAL
+        return `📊 **STRUCTURED FINANCIAL PLAN**
 
-📋 GOAL: ${goal}
-⏰ Timeline: ${timeline} months
-💰 Estimated Budget: ₹${estimatedCapex.toLocaleString()}
-🏦 Current Savings: ₹${savings.toLocaleString()}
-📊 Additional Needed: ₹${totalNeeded.toLocaleString()}
+🎯 **GOAL:** ${goal}
+⏰ **Timeline:** ${timeline} months
+💰 **Estimated Budget:** ₹${estimatedCapex.toLocaleString()}
+🏦 **Current Savings:** ₹${savings.toLocaleString()}
+📈 **Additional Needed:** ₹${totalNeeded.toLocaleString()}
 
-💵 FINANCIAL CAPACITY
-Monthly Average Revenue: ₹${avgRevenue.toLocaleString()}
-Monthly Expenses: ₹${expenses.toLocaleString()}
-Monthly Net Cash Flow: ₹${netCashFlow.toLocaleString()}
-Monthly Savings Target: ₹${monthlySavingsCapacity.toLocaleString()}
-Time to Save: ${monthsToSave === Infinity ? 'Insufficient cash flow' : Math.ceil(monthsToSave) + ' months'}
+💵 **FINANCIAL CAPACITY**
+• Monthly Net Cash Flow: ₹${netCashFlow.toLocaleString()}
+• Monthly Savings Target: ₹${monthlySavingsCapacity.toLocaleString()}
+• Time to Save: ${monthsToSave === Infinity ? 'Insufficient cash flow' : Math.ceil(monthsToSave) + ' months'}
 
-${isFeasible ? '✅ ACHIEVABLE' : '⚠️ CHALLENGING'}
+${isFeasible ? '✅ **ACHIEVABLE**' : '⚠️ **CHALLENGING**'}
 Confidence Level: ${isFeasible ? 'High' : 'Medium'}
 
-${cashflowValues.length > 1 ? `📈 CASH FLOW ANALYSIS
-Projected Revenue: ${cashflowValues.map((v, i) => `Month ${i+1}: ₹${v.toLocaleString()}`).join(', ')}
-Average Monthly Revenue: ₹${avgRevenue.toLocaleString()}
-
-` : ''}📅 MONTHLY PLAN
-📅 MONTHLY PLAN
-${this.generateMonthlyPlan(timeline, monthlySavingsCapacity, savings, estimatedCapex)}
-
-💡 RECOMMENDATIONS:
-${isFeasible ? 
-  '• Set up automatic transfers to savings\n• Review expenses monthly\n• Consider accelerating if cash flow improves' :
-  '• Consider extending timeline by 3-6 months\n• Explore business loan options\n• Focus on increasing revenue first'
-}
-
-${funding === 'loan' ? '🏦 LOAN CONSIDERATIONS:\n• Prepare 2-3 years of financial statements\n• Consider business loan of ₹' + Math.ceil(totalNeeded/10000)*10000 + '\n• Compare interest rates from multiple lenders\n\n' : ''}${funding === 'external' ? '👥 EXTERNAL FUNDING:\n• Develop comprehensive business plan\n• Prepare investor pitch deck\n• Consider equity vs debt financing\n\n' : ''}🎯 NEXT STEPS:
-🎯 NEXT STEPS:
-1. Open dedicated savings account
-2. Set up monthly transfers
+🎯 **NEXT STEPS:**
+1. Set up dedicated savings account
+2. Automate monthly transfers
 3. Track progress monthly
-4. Review and adjust quarterly`;
-    }
-    
-    generateMonthlyPlan(timeline, monthlySavings, currentSavings, targetAmount) {
-        let plan = '';
-        let cumulative = currentSavings;
-        
-        for (let month = 1; month <= Math.min(timeline, 6); month++) {
-            cumulative += monthlySavings;
-            const progress = (cumulative / targetAmount) * 100;
-            
-            plan += `Month ${month}: Save ₹${monthlySavings.toLocaleString()} (Total: ₹${cumulative.toLocaleString()}) - ${Math.min(100, progress).toFixed(0)}%\n`;
-        }
-        
-        if (timeline > 6) {
-            plan += `... (showing first 6 months of ${timeline} month plan)`;
-        }
-        
-        return plan;
+4. Review and adjust quarterly
+
+${funding === 'loan' ? '🏦 **LOAN CONSIDERATIONS:**\n• Prepare financial statements\n• Compare interest rates\n• Consider loan amount: ₹' + Math.ceil(totalNeeded/10000)*10000 : ''}`;
     }
     
     extractNumber(text) {
