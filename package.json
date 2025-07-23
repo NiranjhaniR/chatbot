@@ -4,8 +4,8 @@
   "description": "Goal-Based Financial Planner Chatbot for SMEs",
   "main": "index.html",
   "scripts": {
-    "dev": "python -m http.server 3000",
-    "start": "python -m http.server 3000"
+    "dev": "npx serve . -p 3000",
+    "start": "npx serve . -p 3000"
   },
   "keywords": ["financial", "planning", "chatbot", "sme", "business"],
   "author": "Financial Advisor AI",
